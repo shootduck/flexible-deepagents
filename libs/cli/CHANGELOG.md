@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.0.35](https://github.com/langchain-ai/deepagents/compare/deepagents-cli==0.0.34...deepagents-cli==0.0.35) (2026-03-20)
+
+
+### Features
+
+* **cli:** add animated spinner to non-interactive verbose mode ([#2001](https://github.com/langchain-ai/deepagents/issues/2001)) ([153f465](https://github.com/langchain-ai/deepagents/commit/153f465937c09a792119a0e0c8656fa8df29d4e5))
+* **cli:** auto-update lifecycle, `/update` command, install script ux ([#2095](https://github.com/langchain-ai/deepagents/issues/2095)) ([fd92f6e](https://github.com/langchain-ai/deepagents/commit/fd92f6eaa87bb1a397f1b7fd216657f354c46e0f))
+* **cli:** context-aware connecting banner for resume and local server ([#2092](https://github.com/langchain-ai/deepagents/issues/2092)) ([18b385b](https://github.com/langchain-ai/deepagents/commit/18b385be979d461797a76b6d7217e259fe260b2c))
+* **cli:** enhance tool-call UI, add `Ctrl+U` shortcut for chat input ([#1757](https://github.com/langchain-ai/deepagents/issues/1757)) ([800c552](https://github.com/langchain-ai/deepagents/commit/800c55213aa4c6515759fb70d36af370feb86302))
+* **cli:** pop queued messages individually on `esc` instead of clearing all ([#2089](https://github.com/langchain-ai/deepagents/issues/2089)) ([c76d855](https://github.com/langchain-ai/deepagents/commit/c76d855e4c73a448af17ade8ad54a2071f2c6bfe))
+* **cli:** show platform-specific ripgrep install command in missing-tool warning ([#1997](https://github.com/langchain-ai/deepagents/issues/1997)) ([f000ce5](https://github.com/langchain-ai/deepagents/commit/f000ce58ebb6438397e8eb016b2a788a91fe5754))
+* **sdk:** port `LangSmithSandbox` from CLI to SDK ([#1983](https://github.com/langchain-ai/deepagents/issues/1983)) ([dfff6e7](https://github.com/langchain-ai/deepagents/commit/dfff6e7d2f91c269290ab677a9bd7454bc2f4989))
+* **sdk:** rename backend methods ([#1907](https://github.com/langchain-ai/deepagents/issues/1907)) ([7665066](https://github.com/langchain-ai/deepagents/commit/7665066c093c2583c4cd3bf83515b0906277306f))
+
+
+### Bug Fixes
+
+* **cli:** eliminate autocomplete popup flicker ([#2020](https://github.com/langchain-ai/deepagents/issues/2020)) ([4b2db1e](https://github.com/langchain-ai/deepagents/commit/4b2db1eab412ecfb1343fae123777f14e935fcea))
+* **cli:** harden MCP pre-flight health checks ([#2019](https://github.com/langchain-ai/deepagents/issues/2019)) ([2b27055](https://github.com/langchain-ai/deepagents/commit/2b270558fcd846f9f82ffa2bc3b56810b5851d7d))
+* **cli:** human-readable duration and consistent dim styling on teardown screen ([#1995](https://github.com/langchain-ai/deepagents/issues/1995)) ([901a0a4](https://github.com/langchain-ai/deepagents/commit/901a0a400fccfafbef069d6632acb2227f0aef41))
+* **cli:** isolate test history writes from real history file ([#2006](https://github.com/langchain-ai/deepagents/issues/2006)) ([a078257](https://github.com/langchain-ai/deepagents/commit/a078257ba6f9d9cae540f6eb82a0eabc92d71211))
+* **cli:** misleading "missing package" error when provider import fails ([#1960](https://github.com/langchain-ai/deepagents/issues/1960)) ([b90fbad](https://github.com/langchain-ai/deepagents/commit/b90fbad1335222a3b7ceb469f7f46fedec79ac61))
+* **cli:** patch model identity in system prompt on `/model` swap ([#2024](https://github.com/langchain-ai/deepagents/issues/2024)) ([36aecbf](https://github.com/langchain-ai/deepagents/commit/36aecbf939cafb2d5914620a9e2ec890b02447a4))
+* **cli:** pre-flight health checks for MCP servers ([#2008](https://github.com/langchain-ai/deepagents/issues/2008)) ([30d60e3](https://github.com/langchain-ai/deepagents/commit/30d60e3866bde51a71f607fcd5cbe9dd75c5da75))
+* **cli:** prevent premature thinking state with parallel subtasks ([#1858](https://github.com/langchain-ai/deepagents/issues/1858)) ([189104c](https://github.com/langchain-ai/deepagents/commit/189104c622a5fa874ad1d4be1c18e012cafd605a))
+* **cli:** rebind toggle tool output to `ctrl+o` to unblock `cmd+right` ([#2088](https://github.com/langchain-ai/deepagents/issues/2088)) ([b486fe5](https://github.com/langchain-ai/deepagents/commit/b486fe5df5aa0efd11cdcffdbd96f433c2b127b3))
+* **cli:** remove keybinding overrides that shadow textual built-ins ([#2084](https://github.com/langchain-ai/deepagents/issues/2084)) ([08fc5d0](https://github.com/langchain-ai/deepagents/commit/08fc5d088ca7be041ad680b87236a4f9e9c212cf))
+* **cli:** slash commands should not require server connection / queue ([#1974](https://github.com/langchain-ai/deepagents/issues/1974)) ([32bd814](https://github.com/langchain-ai/deepagents/commit/32bd814b98a079778dad092a2e877d8eba22b0fb))
+* **cli:** surface clear error for missing sandbox provider deps ([#1999](https://github.com/langchain-ai/deepagents/issues/1999)) ([939f56a](https://github.com/langchain-ai/deepagents/commit/939f56a19244714fc53158a2fd162e3098b3d56c))
+
+
+### Performance Improvements
+
+* **cli:** defer heavy imports from startup path ([#2022](https://github.com/langchain-ai/deepagents/issues/2022)) ([b7f5a99](https://github.com/langchain-ai/deepagents/commit/b7f5a99ecda2e3b795764e74bc1e9cbc405b7e18))
+* **cli:** sub 250ms first paint ([#2027](https://github.com/langchain-ai/deepagents/issues/2027)) ([e42e05c](https://github.com/langchain-ai/deepagents/commit/e42e05c12229ece450746d6f943d2483477518a5))
+
 ## [0.0.34](https://github.com/langchain-ai/deepagents/compare/deepagents-cli==0.0.33...deepagents-cli==0.0.34) (2026-03-17)
 
 ### Features
