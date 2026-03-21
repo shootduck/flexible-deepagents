@@ -331,3 +331,223 @@ def create_deep_agent(  # noqa: C901, PLR0912  # Complex graph assembly logic wi
             },
         }
     )
+
+
+def create_flexible_deep_agent(  # noqa: C901, PLR0912  # Complex graph assembly logic with many conditional branches
+    model: str | BaseChatModel | None = None,
+    tools: Sequence[BaseTool | Callable | dict[str, Any]] | None = None,
+    *,
+    system_prompt: str | SystemMessage | None = None,
+    middleware: Sequence[AgentMiddleware | str] = ["DefaultMiddlewares"],
+    subagents: Sequence[SubAgent | CompiledSubAgent | AsyncSubAgent | str] = ["DefaultGeneralPurposeSubAgent"],
+    skills: list[str] | None = None,
+    memory: list[str] | None = None,
+    response_format: ResponseFormat | None = None,
+    context_schema: type[Any] | None = None,
+    checkpointer: Checkpointer | None = None,
+    store: BaseStore | None = None,
+    backend: BackendProtocol | BackendFactory | None = None,
+    interrupt_on: dict[str, bool | InterruptOnConfig] | None = None,
+    debug: bool = False,
+    name: str | None = None,
+    cache: BaseCache | None = None,
+) -> CompiledStateGraph:
+    """Create a deep agent.
+
+    !!! warning "Deep agents require a LLM that supports tool calling!"
+
+    By default, this agent has access to the following tools:
+
+    - `write_todos`: manage a todo list
+    - `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`: file operations
+    - `execute`: run shell commands
+    - `task`: call subagents
+
+    The `execute` tool allows running shell commands if the backend implements `SandboxBackendProtocol`.
+    For non-sandbox backends, the `execute` tool will return an error message.
+
+    Args:
+        model: The model to use.
+
+            Defaults to `claude-sonnet-4-6`.
+
+            Use the `provider:model` format (e.g., `openai:gpt-5`) to quickly switch between models.
+
+            If an `openai:` model is used, the agent will use the OpenAI
+            Responses API by default. To use OpenAI chat completions instead,
+            initialize the model with
+            `init_chat_model("openai:...", use_responses_api=False)` and pass
+            the initialized model instance here. To disable data retention with
+            the Responses API, use
+            `init_chat_model("openai:...", use_responses_api=True, store=False, include=["reasoning.encrypted_content"])`
+            and pass the initialized model instance here.
+        tools: The tools the agent should have access to.
+
+            In addition to custom tools you provide, deep agents include built-in tools for planning,
+            file management, and subagent spawning.
+        system_prompt: Custom system instructions to prepend before the base deep agent
+            prompt.
+
+            If a string, it's concatenated with the base prompt.
+        middleware: Additional middleware to apply after the base stack
+            (`TodoListMiddleware`, `FilesystemMiddleware`, `SubAgentMiddleware`,
+            `SummarizationMiddleware`, `PatchToolCallsMiddleware`) but before
+            `AnthropicPromptCachingMiddleware` and `MemoryMiddleware`.
+        subagents: Optional subagent specs available to the main agent.
+
+            This collection supports three forms:
+
+            - `SubAgent`: A declarative synchronous subagent spec.
+            - `CompiledSubAgent`: A pre-compiled runnable subagent.
+            - `AsyncSubAgent`: A remote/background subagent spec.
+
+            `SubAgent` entries are invoked through the `task` tool. They should
+            provide `name`, `description`, and `system_prompt`, and may also
+            override `tools`, `model`, `middleware`, `interrupt_on`, and
+            `skills`.
+
+            `CompiledSubAgent` entries are also exposed through the `task` tool,
+            but provide a pre-built `runnable` instead of a declarative prompt
+            and tool configuration.
+
+            `AsyncSubAgent` entries are identified by their async-subagent
+            fields (`graph_id`, and optionally `url`/`headers`) and are routed
+            into `AsyncSubAgentMiddleware` instead of `SubAgentMiddleware`.
+            They should provide `name`, `description`, and `graph_id`, and may
+            optionally include `url` and `headers`. These subagents run as
+            background jobs and expose the async subagent tools for launching,
+            checking, updating, cancelling, and listing jobs.
+
+            If no subagent named `general-purpose` is provided, a default
+            general-purpose synchronous subagent is added automatically.
+
+        skills: Optional list of skill source paths (e.g., `["/skills/user/", "/skills/project/"]`).
+
+            Paths must be specified using POSIX conventions (forward slashes) and are relative
+            to the backend's root. When using `StateBackend` (default), provide skill files via
+            `invoke(files={...})`. With `FilesystemBackend`, skills are loaded from disk relative
+            to the backend's `root_dir`. Later sources override earlier ones for skills with the
+            same name (last one wins).
+        memory: Optional list of memory file paths (`AGENTS.md` files) to load
+            (e.g., `["/memory/AGENTS.md"]`).
+
+            Display names are automatically derived from paths.
+
+            Memory is loaded at agent startup and added into the system prompt.
+        response_format: A structured output response format to use for the agent.
+        context_schema: The schema of the deep agent.
+        checkpointer: Optional `Checkpointer` for persisting agent state between runs.
+        store: Optional store for persistent storage (required if backend uses `StoreBackend`).
+        backend: Optional backend for file storage and execution.
+
+            Pass either a `Backend` instance or a callable factory like `lambda rt: StateBackend(rt)`.
+            For execution support, use a backend that implements `SandboxBackendProtocol`.
+        interrupt_on: Mapping of tool names to interrupt configs.
+
+            Pass to pause agent execution at specified tool calls for human approval or modification.
+
+            Example: `interrupt_on={"edit_file": True}` pauses before every edit.
+        debug: Whether to enable debug mode. Passed through to `create_agent`.
+        name: The name of the agent. Passed through to `create_agent`.
+        cache: The cache to use for the agent. Passed through to `create_agent`.
+
+    Returns:
+        A configured deep agent.
+    """
+    model = get_default_model() if model is None else resolve_model(model)
+    backend = backend if backend is not None else (StateBackend)
+
+    # Build general-purpose subagent with default middleware stack
+    gp_middleware: list[AgentMiddleware[Any, Any, Any]] = [
+        TodoListMiddleware(),
+        FilesystemMiddleware(backend=backend),
+        create_summarization_middleware(model, backend),
+        PatchToolCallsMiddleware(),
+    ]
+    if skills is not None:
+        gp_middleware.append(SkillsMiddleware(backend=backend, sources=skills))
+    gp_middleware.append(AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore"))
+    if interrupt_on is not None:
+        gp_middleware.append(HumanInTheLoopMiddleware(interrupt_on=interrupt_on))
+
+    general_purpose_spec: SubAgent = {  # ty: ignore[missing-typed-dict-key]
+        **GENERAL_PURPOSE_SUBAGENT,
+        "model": model,
+        "tools": tools or [],
+        "middleware": gp_middleware,
+    }
+
+    # Set up subagent middleware
+    inline_subagents: list[SubAgent | CompiledSubAgent] = []
+    async_subagents: list[AsyncSubAgent] = []
+    # Check for asked default subagents
+    if "DefaultGeneralPurposeSubAgent" in subagents:
+        inline_subagents.append(general_purpose_spec)
+    # Filter out string placeholders and process actual specs
+    subagents_list: list[SubAgent | CompiledSubAgent | AsyncSubAgent] = [spec for spec in subagents if not isinstance(spec, str)]
+    for spec in subagents_list:
+        if "graph_id" in spec:
+            # Then spec is an AsyncSubAgent
+            async_subagents.append(cast("AsyncSubAgent", spec))
+        else:
+            inline_subagents.append(spec)
+
+    # Build main agent middleware stack
+    deepagent_middleware: list[AgentMiddleware[Any, Any, Any]] = []
+
+    # Check for asked default middlewares
+    if "DefaultMiddlewares" in middleware:
+        deepagent_middleware.append(TodoListMiddleware())
+        deepagent_middleware.append(FilesystemMiddleware(backend=backend))
+        deepagent_middleware.append(create_summarization_middleware(model, backend))
+        deepagent_middleware.append(PatchToolCallsMiddleware())
+        # Caching + memory after all other middleware so memory updates don't
+        # invalidate the Anthropic prompt cache prefix.
+        deepagent_middleware.append(AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore"))
+    deepagent_middleware.extend([mw for mw in middleware if isinstance(mw, AgentMiddleware)])
+
+    if skills is not None:
+        deepagent_middleware.append(SkillsMiddleware(backend=backend, sources=skills))
+    if inline_subagents != []:
+        deepagent_middleware.append(
+            SubAgentMiddleware(
+                backend=backend,
+                subagents=inline_subagents,
+            )
+        )
+
+    if async_subagents:
+        # Async here means that we run these subagents in a non-blocking manner.
+        # Currently this supports agents deployed via LangSmith deployments.
+        deepagent_middleware.append(AsyncSubAgentMiddleware(async_subagents=async_subagents))
+
+    if memory is not None:
+        deepagent_middleware.append(MemoryMiddleware(backend=backend, sources=memory))
+    if interrupt_on is not None:
+        deepagent_middleware.append(HumanInTheLoopMiddleware(interrupt_on=interrupt_on))
+
+    if system_prompt is None:
+        final_system_prompt: str | SystemMessage = BASE_AGENT_PROMPT
+    else:
+        final_system_prompt = system_prompt
+
+    return create_agent(
+        model,
+        system_prompt=final_system_prompt,
+        tools=tools,
+        middleware=deepagent_middleware,
+        response_format=response_format,
+        context_schema=context_schema,
+        checkpointer=checkpointer,
+        store=store,
+        debug=debug,
+        name=name,
+        cache=cache,
+    ).with_config(
+        {
+            "recursion_limit": 1000,
+            "metadata": {
+                "ls_integration": "deepagents",
+            },
+        }
+    )

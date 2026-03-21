@@ -5,9 +5,10 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Annotated, Any, NotRequired, TypedDict, Unpack, cast
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware, InterruptOnConfig
+from langchain.agents.middleware import HumanInTheLoopMiddleware, InterruptOnConfig, TodoListMiddleware
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse, ResponseT
 from langchain.tools import BaseTool, ToolRuntime
+from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.runnables import Runnable
@@ -16,6 +17,10 @@ from langgraph.types import Command
 
 from deepagents.backends.protocol import BackendFactory, BackendProtocol
 from deepagents.middleware._utils import append_to_system_message
+from deepagents.middleware.filesystem import FilesystemMiddleware
+from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
+from deepagents.middleware.skills import SkillsMiddleware
+from deepagents.middleware.summarization import create_summarization_middleware
 
 
 class SubAgent(TypedDict):
@@ -67,7 +72,7 @@ class SubAgent(TypedDict):
     model: NotRequired[str | BaseChatModel]
     """Override the main agent's model. Use `'provider:model-name'` format."""
 
-    middleware: NotRequired[list[AgentMiddleware]]
+    middleware: NotRequired[list[AgentMiddleware | str]]
     """Additional middleware for custom behavior."""
 
     interrupt_on: NotRequired[dict[str, bool | InterruptOnConfig]]
@@ -645,13 +650,28 @@ class SubAgentMiddleware(AgentMiddleware[Any, ContextT, ResponseT]):
 
             model = resolve_model(spec["model"])
 
+            # Check for asked default middlewares
+            middleware = list(spec.get("middleware", []))
+            default_middlewares: list[AgentMiddleware[Any, Any, Any]] = []
+            if "DefaultMiddlewares" in middleware:
+                default_middlewares.extend(
+                    [
+                        TodoListMiddleware(),
+                        FilesystemMiddleware(backend=self._backend),
+                        create_summarization_middleware(model, self._backend),
+                        PatchToolCallsMiddleware(),
+                        AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore"),
+                    ]
+                )
             # Use middleware as provided (caller is responsible for building full stack)
-            middleware: list[AgentMiddleware] = list(spec.get("middleware", []))
+            middlewares_list: list[AgentMiddleware] = default_middlewares + [m for m in middleware if isinstance(m, AgentMiddleware)]
 
             interrupt_on = spec.get("interrupt_on")
             if interrupt_on:
-                middleware.append(HumanInTheLoopMiddleware(interrupt_on=interrupt_on))
-
+                middlewares_list.append(HumanInTheLoopMiddleware(interrupt_on=interrupt_on))
+            skills = spec.get("skills")
+            if skills:
+                middlewares_list.append(cast("AgentMiddleware[Any, Any, Any]", SkillsMiddleware(backend=self._backend, sources=skills)))
             specs.append(
                 {
                     "name": spec["name"],
@@ -660,7 +680,7 @@ class SubAgentMiddleware(AgentMiddleware[Any, ContextT, ResponseT]):
                         model,
                         system_prompt=spec["system_prompt"],
                         tools=spec["tools"],
-                        middleware=middleware,
+                        middleware=middlewares_list,
                         name=spec["name"],
                     ),
                 }
