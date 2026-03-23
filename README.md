@@ -1,3 +1,33 @@
+# Flexible Deep Agents
+
+This repository provides a new entry `create_flexible_deep_agent()`, which gives you more flexibility when customizing a deep agent. This repository will be synchronized with the upstream repository (https://github.com/langchain-ai/deepagents) once a day until a similar feature is integrated into it.
+
+## Features
+
+The new `create_flexible_deep_agent()` mirrors the original `create_deep_agent()` but incorporates specific placeholders, giving you the flexibility to choose whether to utilize the default components:
+
+- **"DefaultMiddlewares"**: Whether to use the default tools (planning, filesystem, shell-access). If you provide a list without "DefaultMiddlewares", those tools are not included. If you do not specify the `middleware` list, those tools are included.
+  ```python
+  create_flexible_deep_agent(..., middleware=["DefaultMiddlewares", ...], ...)
+  ```
+- **"DefaultGeneralPurposeSubAgent"**: Whether to use the default general-purpose subagent. If you provide a list without "DefaultGeneralPurposeSubAgent", the default general-purpose subagent is not included. If you do not specify the `subagents` list, it is included.
+  ```python
+  create_flexible_deep_agent(..., subagents=["DefaultGeneralPurposeSubAgent", ...], ...)
+  ```
+- **"DefaultMiddlewares" for subagent**: Whether to use the default tools (planning, filesystem, shell-access) in your subagents. In the original `create_deep_agent()`, every subagent you provide is equipped with the default tools, and the new entry disable that feature. If you want the default tools in your subagents, you must **explicitly include** it in the `middleware` field when you create a subagent.
+  ```python
+  mysubagent: dict = {
+    name=<mysubagent name>,
+    description=<mysubagent description>,
+    system_prompt=<mysubagent system prompt>
+    middleware=["DefaultMiddlewares", ...],
+    ...
+  }
+  ```
+- **Omit the default agent prompt**: The `create_deep_agent()` forcibly appends a default prompt (see `BASE_AGENT_PROMPT` in graph.py) to your provided system prompt; we have removed this behavior. The default prompt is used only when the `system_prompt` field is unspecified.
+
+## Original README Content
+
 <div align="center">
   <a href="https://docs.langchain.com/oss/python/deepagents/overview#deep-agents-overview">
     <picture>
